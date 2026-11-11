@@ -1,9 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using LuckySpinAPI.Data;
-using LuckySpinAPI.Models;
-using System;
 using System.Threading.Tasks;
+using LuckySpinAPI.Models;
+using LuckySpinAPI.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace LuckySpinAPI.Controllers
 {
@@ -11,82 +9,42 @@ namespace LuckySpinAPI.Controllers
     [Route("api/[controller]")]
     public class SlotsController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly SlotService _service;
 
-        public SlotsController(AppDbContext context)
+        public SlotsController(SlotService service)
         {
-            _context = context;
+            _service = service;
         }
 
-        // Эндпоинт загрузки баланса: GET /api/slots/balance/1
+        // GET /api/slots/balance/1 — баланс; для нового игрока создаётся запись с 1000 кредитов
         [HttpGet("balance/{userId}")]
         public async Task<IActionResult> GetBalance(int userId)
         {
-            var user = await _context.Users.FindAsync(userId);
-
-            // Если In-Memory БД чистая и пользователя нет — создаем его автоматически
-            if (user == null)
-            {
-                user = new User { Id = userId, Balance = 1000 };
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
-            }
-
-            return Ok(new { balance = user.Balance });
+            decimal balance = await _service.GetOrCreateBalanceAsync(userId);
+            return Ok(new { balance });
         }
 
-        // Эндпоинт совершения ставки: POST /api/slots/spin
+        // POST /api/slots/spin — ставка и вращение
         [HttpPost("spin")]
         public async Task<IActionResult> Spin([FromBody] SpinRequest request)
         {
-            var user = await _context.Users.FindAsync(request.UserId);
-            if (user == null)
+            var result = await _service.SpinAsync(request.UserId, request.BetAmount);
+
+            switch (result.Status)
             {
-                return NotFound("Пользователь не найден. Нужна регистрация.");
+                case SpinStatus.Success:
+                    return Ok(new
+                    {
+                        combination = result.Combination,
+                        newBalance = result.NewBalance,
+                        isWin = result.IsWin,
+                        winAmount = result.WinAmount
+                    });
+                case SpinStatus.UserNotFound:
+                    return NotFound(new { message = result.Message });
+                default:
+                    return BadRequest(new { message = result.Message });
             }
-
-            if (user.Balance < request.BetAmount)
-            {
-                return BadRequest("Недостаточно кредитов на балансе!");
-            }
-
-            // Списываем ставку
-            user.Balance -= request.BetAmount;
-
-            // Логика генерации символов
-            string[] symbols = { "🍒", "🍋", "777" };
-            Random rand = new Random();
-            string s1 = symbols[rand.Next(symbols.Length)];
-            string s2 = symbols[rand.Next(symbols.Length)];
-            string s3 = symbols[rand.Next(symbols.Length)];
-
-            string combination = $"{s1}|{s2}|{s3}";
-            bool isWin = (s1 == s2 && s2 == s3);
-            decimal winAmount = 0;
-
-            if (isWin)
-            {
-                winAmount = request.BetAmount * 5; // Выигрыш x5
-                user.Balance += winAmount;
-            }
-
-            // Сохраняем новое состояние баланса в базу данных
-            await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                combination = combination,
-                newBalance = user.Balance,
-                isWin = isWin,
-                winAmount = winAmount
-            });
         }
-    }
-
-    // Класс-модель для входящего JSON-запроса ставки
-    public class SpinRequest
-    {
-        public int UserId { get; set; }
-        public decimal BetAmount { get; set; }
     }
 }

@@ -1,36 +1,44 @@
-﻿using System;
-
 namespace LuckySpinAPI.Services
 {
+    /// <summary>Результат одного вращения барабанов.</summary>
+    public class SpinOutcome
+    {
+        public string Combination { get; set; } = string.Empty;
+        public bool IsWin { get; set; }
+    }
+
+    /// <summary>Правила игры: единственное место, где определены символы и выплаты (FR-03).</summary>
     public class SlotEngine
     {
-        private readonly string[] _symbols = { "🍒", "🍋", "🍇", "💎", "7️⃣" };
-        private readonly Random _random = new Random();
+        /// <summary>Множитель выигрыша при трёх одинаковых символах.</summary>
+        public const decimal WinMultiplier = 5m;
 
-        public (string Combination, decimal WinMultiplier) Spin()
+        public static readonly string[] Symbols = { "🍒", "🍋", "777" };
+
+        private readonly IRandomSource _random;
+
+        public SlotEngine(IRandomSource random)
         {
-            var reel1 = _symbols[_random.Next(_symbols.Length)];
-            var reel2 = _symbols[_random.Next(_symbols.Length)];
-            var reel3 = _symbols[_random.Next(_symbols.Length)];
+            _random = random;
+        }
 
-            string combination = $"{reel1}|{reel2}|{reel3}";
-            decimal multiplier = 0;
+        public SpinOutcome Spin()
+        {
+            string s1 = Symbols[_random.Next(Symbols.Length)];
+            string s2 = Symbols[_random.Next(Symbols.Length)];
+            string s3 = Symbols[_random.Next(Symbols.Length)];
 
-            if (reel1 == reel2 && reel2 == reel3)
+            return new SpinOutcome
             {
-                multiplier = reel1 switch
-                {
-                    "7️⃣" => 50,
-                    "💎" => 20,
-                    _ => 10
-                };
-            }
-            else if (reel1 == reel2 || reel2 == reel3)
-            {
-                multiplier = 2;
-            }
+                Combination = $"{s1}|{s2}|{s3}",
+                IsWin = s1 == s2 && s2 == s3
+            };
+        }
 
-            return (combination, multiplier);
+        /// <summary>Сумма выигрыша: ставка × 5 при победе, иначе 0.</summary>
+        public decimal CalculateWin(decimal betAmount, bool isWin)
+        {
+            return isWin ? betAmount * WinMultiplier : 0m;
         }
     }
 }

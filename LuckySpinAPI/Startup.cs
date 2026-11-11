@@ -27,8 +27,10 @@ namespace LuckySpinAPI
             services.AddDbContext<AppDbContext>(options =>
                 options.UseInMemoryDatabase("LuckySpinDb"));
 
-            // 3. Регистрируем игровой движок слотов
+            // 3. Игровая логика: источник случайности, движок правил и сервис ставок
+            services.AddSingleton<IRandomSource, SystemRandomSource>();
             services.AddSingleton<SlotEngine>();
+            services.AddScoped<SlotService>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

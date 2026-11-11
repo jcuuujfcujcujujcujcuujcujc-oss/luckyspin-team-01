@@ -398,3 +398,113 @@
 
         <!-- СТРАНИЦА 3: КОНТАКТЫ -->
         <div id="contacts" class="page">
+            <div class="content-card">
+                <h2>📞 Контакты поддержки</h2>
+                <div class="contacts-wrapper">
+                    <div class="info-list">
+                        <div class="info-box">
+                            <h4>Проект</h4>
+                            <p>LuckySpinAPI, учебный проект (виртуальные кредиты)</p>
+                        </div>
+                        <div class="info-box">
+                            <h4>Репозиторий</h4>
+                            <p>Раздел Issues на GitHub</p>
+                        </div>
+                        <div class="info-box">
+                            <h4>Важно</h4>
+                            <p>Игра идёт на виртуальные кредиты. Реальные деньги не используются.</p>
+                        </div>
+                    </div>
+                    <div class="fake-map">🎰</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>LuckySpinAPI · учебный проект МДК.03.02 · только виртуальные кредиты</footer>
+
+    <script>
+        // В MVP регистрации нет: используется один игрок с идентификатором 1.
+        const USER_ID = 1;
+
+        function switchPage(pageId, button) {
+            document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+            document.getElementById(pageId).classList.add('active');
+            document.querySelectorAll('nav button').forEach(function (b) { b.classList.remove('active'); });
+            button.classList.add('active');
+        }
+
+        function setStatus(text, kind) {
+            var status = document.getElementById('status');
+            status.textContent = text;
+            status.className = 'status' + (kind ? ' ' + kind : '');
+        }
+
+        // Сообщение об ошибке приходит от API в поле message (JSON).
+        async function readError(response) {
+            try {
+                var data = await response.json();
+                if (data && data.message) { return data.message; }
+            } catch (e) { /* тело не JSON */ }
+            return 'Ошибка сервера (' + response.status + ').';
+        }
+
+        async function loadBalance() {
+            try {
+                var response = await fetch('/api/slots/balance/' + USER_ID);
+                if (!response.ok) { throw new Error(await readError(response)); }
+                var data = await response.json();
+                document.getElementById('balance').textContent = data.balance;
+            } catch (e) {
+                document.getElementById('balance').textContent = '—';
+                setStatus('Не удалось загрузить баланс.', 'lose');
+            }
+        }
+
+        async function playSpin() {
+            var bet = Number(document.getElementById('bet').value);
+            if (!(bet > 0)) {
+                setStatus('Ставка должна быть больше нуля.', 'lose');
+                return;
+            }
+
+            var button = document.getElementById('spinBtn');
+            var reels = [document.getElementById('reel1'), document.getElementById('reel2'), document.getElementById('reel3')];
+            button.disabled = true;
+            reels.forEach(function (r) { r.classList.add('spinning'); });
+            setStatus('Вращение...', 'info');
+
+            try {
+                var response = await fetch('/api/slots/spin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: USER_ID, betAmount: bet })
+                });
+
+                if (!response.ok) {
+                    setStatus(await readError(response), 'lose');
+                    return;
+                }
+
+                var result = await response.json();
+                var symbols = result.combination.split('|');
+                reels.forEach(function (r, i) { r.textContent = symbols[i]; });
+                document.getElementById('balance').textContent = result.newBalance;
+
+                if (result.isWin) {
+                    setStatus('Выигрыш! +' + result.winAmount + ' кредитов', 'win');
+                } else {
+                    setStatus('Не повезло. Попробуйте ещё раз.', 'lose');
+                }
+            } catch (e) {
+                setStatus('Нет связи с сервером.', 'lose');
+            } finally {
+                reels.forEach(function (r) { r.classList.remove('spinning'); });
+                button.disabled = false;
+            }
+        }
+
+        loadBalance();
+    </script>
+</body>
+</html>
